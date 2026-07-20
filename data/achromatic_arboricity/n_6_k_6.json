@@ -1,0 +1,102 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "id": 0
+    },
+    {
+      "id": 1
+    },
+    {
+      "id": 2
+    },
+    {
+      "id": 3
+    },
+    {
+      "id": 4
+    },
+    {
+      "id": 5
+    }
+  ],
+  "links": [
+    {
+      "color": 0,
+      "source": 0,
+      "target": 4
+    },
+    {
+      "color": 1,
+      "source": 0,
+      "target": 3
+    },
+    {
+      "color": 2,
+      "source": 0,
+      "target": 2
+    },
+    {
+      "color": 3,
+      "source": 0,
+      "target": 1
+    },
+    {
+      "color": 5,
+      "source": 0,
+      "target": 5
+    },
+    {
+      "color": 0,
+      "source": 1,
+      "target": 4
+    },
+    {
+      "color": 1,
+      "source": 1,
+      "target": 5
+    },
+    {
+      "color": 3,
+      "source": 1,
+      "target": 3
+    },
+    {
+      "color": 4,
+      "source": 1,
+      "target": 2
+    },
+    {
+      "color": 2,
+      "source": 2,
+      "target": 4
+    },
+    {
+      "color": 4,
+      "source": 2,
+      "target": 3
+    },
+    {
+      "color": 4,
+      "source": 2,
+      "target": 5
+    },
+    {
+      "color": 2,
+      "source": 3,
+      "target": 4
+    },
+    {
+      "color": 5,
+      "source": 3,
+      "target": 5
+    },
+    {
+      "color": 0,
+      "source": 4,
+      "target": 5
+    }
+  ]
+}
