@@ -1,7 +1,10 @@
 {
   "directed": false,
   "multigraph": false,
-  "graph": {},
+  "graph": {
+    "node_default": {},
+    "edge_default": {}
+  },
   "nodes": [
     {
       "id": 0
