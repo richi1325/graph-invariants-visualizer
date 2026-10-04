@@ -1,30 +1,31 @@
-export function parseTxtToGraph(content) {
+function getElementsByName(document, name) {
+  return Array.from(document.getElementsByTagNameNS('*', name));
+}
+
+export function parseGraphML(content) {
   if (!content) return { nodes: [], links: [] };
 
-  const nMatch = content.match(/(?:Nodos|Nodes)\s*\(n\):\s*(\d+)/i);
-  const numNodes = nMatch ? parseInt(nMatch[1], 10) : 0;
+  const document = new DOMParser().parseFromString(content, 'application/xml');
+  if (document.getElementsByTagName('parsererror').length > 0) return { nodes: [], links: [] };
 
-  const nodes = [];
-  for (let i = 0; i < numNodes; i++) {
-    nodes.push({ id: i });
-  }
+  const keys = getElementsByName(document, 'key');
+  const colorKey = keys.find(key => key.getAttribute('for') === 'edge' && key.getAttribute('attr.name') === 'color');
+  const colorKeyId = colorKey?.getAttribute('id');
+  const nodeElements = getElementsByName(document, 'node');
+  const edgeElements = getElementsByName(document, 'edge');
 
-  const links = [];
-  const lines = content.split('\n');
-  lines.forEach(line => {
-    const colorMatch = line.match(/^\s*Color\s+(\d+):\s*\[(.*)\]\s*$/i);
-    if (colorMatch) {
-      const colorCode = parseInt(colorMatch[1], 10);
-      const edgesStr = colorMatch[2];
-      const pairMatches = edgesStr.matchAll(/\((\d+),\s*(\d+)\)/g);
-      for (const m of pairMatches) {
-        links.push({
-          source: parseInt(m[1], 10),
-          target: parseInt(m[2], 10),
-          color: colorCode
-        });
-      }
-    }
+  const nodes = nodeElements.map(node => ({ id: node.getAttribute('id') || '' }));
+  const links = edgeElements.map((edge, index) => {
+    const dataElements = getElementsByName(edge, 'data');
+    const colorData = dataElements.find(data => data.getAttribute('key') === colorKeyId) || dataElements[0];
+    const parsedColor = Number(colorData?.textContent?.trim());
+
+    return {
+      id: edge.getAttribute('id') || `e${index}`,
+      source: edge.getAttribute('source') || '',
+      target: edge.getAttribute('target') || '',
+      color: Number.isFinite(parsedColor) ? parsedColor : 0
+    };
   });
 
   return { nodes, links };

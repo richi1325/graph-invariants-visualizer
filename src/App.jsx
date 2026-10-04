@@ -1,215 +1,164 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Header from './components/Header';
 import ConfigMenu from './components/ConfigMenu';
 import ColorPanel from './components/ColorPanel';
 import GraphVisualizer from './components/GraphVisualizer';
 import Controls from './components/Controls';
 import { validateProperty, validateAllPairs } from './utils/ValidationEngine';
-import { parseTxtToGraph } from './utils/DataParser';
-import { exportCanvasFrame, exportGraphJson } from './utils/GifExporter';
+import { parseGraphML } from './utils/DataParser';
+import { exportCanvasFrame, exportGraphML } from './utils/GifExporter';
 
 const CATEGORY_NAMES = {
-  achromatic: 'Achromatic Index',
-  achromatic_arboricity: 'Achromatic Arboricity',
-  connected_pseudoachromatic: 'Connected Pseudoachromatic',
-  pseudoachromatic: 'Pseudoachromatic Index'
+  achromatic: 'Achromatic index',
+  achromatic_arboricity: 'Achromatic arboricity',
+  connected_pseudoachromatic: 'Connected pseudoachromatic',
+  pseudoachromatic: 'Pseudoachromatic index'
 };
 
-const jsonModules = import.meta.glob('../data/**/*.json', { eager: true });
-const txtModules = import.meta.glob('../data/**/*.txt', { query: '?raw', eager: true });
+const graphmlModules = import.meta.glob('../data/**/*.graphml', { query: '?raw', eager: true });
+
+function loadGraph(category, configId) {
+  const findModule = modules => {
+    const categoryKeys = Object.keys(modules).filter(path => path.toLowerCase().includes(`/${category.toLowerCase()}/`));
+    if (configId) {
+      const exactMatch = categoryKeys.find(path => path.replace(/\\/g, '/').endsWith(`/${configId}.graphml`));
+      if (exactMatch) return modules[exactMatch];
+    }
+    return categoryKeys.length > 0 ? modules[categoryKeys[0]] : null;
+  };
+
+  const graphmlModule = findModule(graphmlModules);
+  if (!graphmlModule) return { nodes: [], links: [] };
+  const rawGraphML = typeof graphmlModule === 'string' ? graphmlModule : graphmlModule.default || '';
+  return parseGraphML(rawGraphML);
+}
+
+function generatePairsList(colors) {
+  const pairs = [];
+  for (let i = 0; i < colors.length; i++) {
+    for (let j = i + 1; j < colors.length; j++) pairs.push([colors[i], colors[j]]);
+  }
+  return pairs;
+}
 
 function App() {
   const [activeCategory, setActiveCategory] = useState('achromatic');
-  const [activeConfigId, setActiveConfigId] = useState('');
-  const [nodes, setNodes] = useState([]);
-  const [links, setLinks] = useState([]);
-  const [activeColors, setActiveColors] = useState([]);
+  const [activeConfigId, setActiveConfigId] = useState('n_2_k_1');
   const [layoutName, setLayoutName] = useState('circle');
   const [isPlaying, setIsPlaying] = useState(false);
   const [animSpeed, setAnimSpeed] = useState(1);
   const [animMode, setAnimMode] = useState('pairs');
+  const [editedGraph, setEditedGraph] = useState(null);
+  const [colorSelection, setColorSelection] = useState({ key: '', colors: [] });
   const cyRef = useRef(null);
   const animIndexRef = useRef(0);
 
-  useEffect(() => {
-    let parsedNodes = [];
-    let parsedLinks = [];
+  const graphKey = `${activeCategory}:${activeConfigId}`;
+  const sourceGraph = useMemo(() => loadGraph(activeCategory, activeConfigId), [activeCategory, activeConfigId]);
+  const graph = editedGraph?.key === graphKey ? editedGraph : { ...sourceGraph, key: graphKey };
+  const { nodes, links } = graph;
 
-    const findMatchingModule = (modules, extension) => {
-      const keys = Object.keys(modules);
-      const categoryKeys = keys.filter(k => k.toLowerCase().includes(`/${activeCategory.toLowerCase()}/`));
-      if (categoryKeys.length === 0) return null;
+  const uniqueColors = useMemo(() => (
+    Array.from(new Set(links.map(link => Number(link.color)))).sort((a, b) => a - b)
+  ), [links]);
+  const activeColors = colorSelection.key === graphKey ? colorSelection.colors : uniqueColors;
 
-      if (activeConfigId) {
-        const exactMatch = categoryKeys.find(k => k.includes(activeConfigId));
-        if (exactMatch) return modules[exactMatch];
-      }
+  const validationStatus = useMemo(() => (
+    validateProperty(activeCategory, activeColors, nodes, links)
+  ), [activeCategory, activeColors, nodes, links]);
+  const matrixStatus = useMemo(() => (
+    validateAllPairs(activeCategory, uniqueColors, nodes, links)
+  ), [activeCategory, uniqueColors, nodes, links]);
 
-      return modules[categoryKeys[0]];
-    };
-
-    const jsonMod = findMatchingModule(jsonModules, 'json');
-    if (jsonMod) {
-      const data = jsonMod.default || jsonMod;
-      parsedNodes = data.nodes || [];
-      parsedLinks = data.links || [];
-    } else {
-      const txtMod = findMatchingModule(txtModules, 'txt');
-      if (txtMod) {
-        const rawText = typeof txtMod === 'string' ? txtMod : txtMod.default || '';
-        const data = parseTxtToGraph(rawText);
-        parsedNodes = data.nodes;
-        parsedLinks = data.links;
-      }
-    }
-
-    setNodes(parsedNodes);
-    setLinks(parsedLinks);
-
-    const colors = Array.from(new Set(parsedLinks.map(l => Number(l.color)))).sort((a, b) => a - b);
-    setActiveColors(colors);
-  }, [activeCategory, activeConfigId]);
-
-  const uniqueColors = useMemo(() => {
-    return Array.from(new Set(links.map(l => Number(l.color)))).sort((a, b) => a - b);
-  }, [links]);
-
-  const validationStatus = useMemo(() => {
-    return validateProperty(activeCategory, activeColors, nodes, links);
-  }, [activeCategory, activeColors, nodes, links]);
-
-  const matrixStatus = useMemo(() => {
-    return validateAllPairs(activeCategory, uniqueColors, nodes, links);
-  }, [activeCategory, uniqueColors, nodes, links]);
-
-  const generatePairsList = (colors) => {
-    const pairs = [];
-    for (let i = 0; i < colors.length; i++) {
-      for (let j = i + 1; j < colors.length; j++) {
-        pairs.push([colors[i], colors[j]]);
-      }
-    }
-    return pairs;
-  };
+  const handleCyReady = useCallback(cy => {
+    cyRef.current = cy;
+  }, []);
 
   useEffect(() => {
-    if (!isPlaying || uniqueColors.length === 0) return;
-
-    const intervalMs = 1200 / animSpeed;
-
+    if (!isPlaying || uniqueColors.length === 0) return undefined;
     const timer = setInterval(() => {
       if (animMode === 'single') {
-        const idx = animIndexRef.current % uniqueColors.length;
-        setActiveColors([uniqueColors[idx]]);
-        animIndexRef.current++;
-      } else {
-        const pairs = generatePairsList(uniqueColors);
-        if (pairs.length > 0) {
-          const idx = animIndexRef.current % pairs.length;
-          setActiveColors(pairs[idx]);
-          animIndexRef.current++;
-        }
+        const index = animIndexRef.current % uniqueColors.length;
+        setColorSelection({ key: graphKey, colors: [uniqueColors[index]] });
+        animIndexRef.current += 1;
+        return;
       }
-    }, intervalMs);
 
+      const pairs = generatePairsList(uniqueColors);
+      if (pairs.length > 0) {
+        const index = animIndexRef.current % pairs.length;
+        setColorSelection({ key: graphKey, colors: pairs[index] });
+        animIndexRef.current += 1;
+      }
+    }, 1200 / animSpeed);
     return () => clearInterval(timer);
-  }, [isPlaying, animSpeed, animMode, uniqueColors]);
+  }, [isPlaying, animSpeed, animMode, uniqueColors, graphKey]);
 
-  const handleToggleColor = (colorCode) => {
+  const handleToggleColor = colorCode => {
     setIsPlaying(false);
-    const codeNum = Number(colorCode);
-    setActiveColors(prev => {
-      const exists = prev.some(c => Number(c) === codeNum);
-      if (exists) {
-        return prev.filter(c => Number(c) !== codeNum);
-      } else {
-        return [...prev, codeNum];
-      }
+    setColorSelection(previous => {
+      const current = previous.key === graphKey ? previous.colors : uniqueColors;
+      const code = Number(colorCode);
+      return { key: graphKey, colors: current.includes(code) ? current.filter(color => color !== code) : [...current, code] };
     });
   };
 
   const handleShowAll = () => {
     setIsPlaying(false);
-    setActiveColors(uniqueColors);
+    setColorSelection({ key: graphKey, colors: uniqueColors });
   };
 
   const handleHideAll = () => {
     setIsPlaying(false);
-    setActiveColors([]);
+    setColorSelection({ key: graphKey, colors: [] });
+  };
+
+  const setAnimationStep = direction => {
+    setIsPlaying(false);
+    if (uniqueColors.length === 0) return;
+    const sequence = animMode === 'single' ? uniqueColors.map(color => [color]) : generatePairsList(uniqueColors);
+    if (sequence.length === 0) return;
+    animIndexRef.current = (animIndexRef.current + direction + sequence.length) % sequence.length;
+    setColorSelection({ key: graphKey, colors: sequence[animIndexRef.current] });
   };
 
   const handleEdgeColorChange = (source, target, newColorCode) => {
-    setLinks(prev => prev.map(link => {
-      const u1 = String(link.source);
-      const v1 = String(link.target);
-      const u2 = String(source);
-      const v2 = String(target);
-      if ((u1 === u2 && v1 === v2) || (u1 === v2 && v1 === u2)) {
-        return { ...link, color: newColorCode };
-      }
-      return link;
-    }));
-  };
-
-  const handleStepPrev = () => {
-    setIsPlaying(false);
-    if (animMode === 'single') {
-      animIndexRef.current = (animIndexRef.current - 1 + uniqueColors.length) % uniqueColors.length;
-      setActiveColors([uniqueColors[animIndexRef.current]]);
-    } else {
-      const pairs = generatePairsList(uniqueColors);
-      if (pairs.length > 0) {
-        animIndexRef.current = (animIndexRef.current - 1 + pairs.length) % pairs.length;
-        setActiveColors(pairs[animIndexRef.current]);
-      }
+    const changedLink = links.find(link => (
+      (String(link.source) === String(source) && String(link.target) === String(target)) ||
+      (String(link.source) === String(target) && String(link.target) === String(source))
+    ));
+    const updatedLinks = links.map(link => {
+      const sameDirection = String(link.source) === String(source) && String(link.target) === String(target);
+      const reverseDirection = String(link.source) === String(target) && String(link.target) === String(source);
+      return sameDirection || reverseDirection ? { ...link, color: newColorCode } : link;
+    });
+    setEditedGraph({ key: graphKey, nodes, links: updatedLinks });
+    if (changedLink && activeColors.includes(Number(changedLink.color))) {
+      setColorSelection({ key: graphKey, colors: Array.from(new Set([...activeColors, Number(newColorCode)])) });
     }
-  };
-
-  const handleStepNext = () => {
-    setIsPlaying(false);
-    if (animMode === 'single') {
-      animIndexRef.current = (animIndexRef.current + 1) % uniqueColors.length;
-      setActiveColors([uniqueColors[animIndexRef.current]]);
-    } else {
-      const pairs = generatePairsList(uniqueColors);
-      if (pairs.length > 0) {
-        animIndexRef.current = (animIndexRef.current + 1) % pairs.length;
-        setActiveColors(pairs[animIndexRef.current]);
-      }
-    }
-  };
-
-  const handleExportImage = () => {
-    if (cyRef.current) {
-      exportCanvasFrame(cyRef.current, `${activeCategory}_${activeConfigId || 'graph'}.png`);
-    }
-  };
-
-  const handleExportJson = () => {
-    exportGraphJson(activeConfigId || 'graph', nodes, links);
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-main)' }}>
+    <div className="app-shell">
       <Header
         categoryTitle={CATEGORY_NAMES[activeCategory]}
-        configName={activeConfigId || 'Configuration'}
+        configName={activeConfigId || 'configuration'}
         numNodes={nodes.length}
         numEdges={links.length}
         numColors={uniqueColors.length}
         isValidGlobal={matrixStatus.isValid}
       />
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div className="workspace">
         <ConfigMenu
           activeCategory={activeCategory}
           activeConfigId={activeConfigId}
-          onSelectCategory={setActiveCategory}
-          onSelectConfig={setActiveConfigId}
+          onSelectCategory={category => { setActiveCategory(category); setEditedGraph(null); }}
+          onSelectConfig={config => { setActiveConfigId(config); setEditedGraph(null); }}
         />
 
-        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '14px', gap: '14px', overflow: 'hidden' }}>
-          <div style={{ flex: 1, position: 'relative' }}>
+        <main className="canvas-column">
+          <div className="canvas-wrap">
             <GraphVisualizer
               nodes={nodes}
               links={links}
@@ -218,23 +167,22 @@ function App() {
               highlightEdges={validationStatus.highlightEdges}
               layoutName={layoutName}
               onEdgeColorChange={handleEdgeColorChange}
-              onCyReady={cy => { cyRef.current = cy; }}
+              onCyReady={handleCyReady}
             />
           </div>
-
           <Controls
             isPlaying={isPlaying}
             animSpeed={animSpeed}
             animMode={animMode}
             layoutName={layoutName}
-            onTogglePlay={() => setIsPlaying(!isPlaying)}
-            onStepPrev={handleStepPrev}
-            onStepNext={handleStepNext}
+            onTogglePlay={() => setIsPlaying(previous => !previous)}
+            onStepPrev={() => setAnimationStep(-1)}
+            onStepNext={() => setAnimationStep(1)}
             onChangeSpeed={setAnimSpeed}
             onChangeMode={setAnimMode}
             onChangeLayout={setLayoutName}
-            onExportImage={handleExportImage}
-            onExportJson={handleExportJson}
+            onExportImage={() => cyRef.current && exportCanvasFrame(cyRef.current, `${activeCategory}_${activeConfigId || 'graph'}.png`)}
+            onExportGraphML={() => exportGraphML(activeConfigId || 'graph', nodes, links)}
           />
         </main>
 

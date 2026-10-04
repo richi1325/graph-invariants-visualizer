@@ -1,138 +1,33 @@
-import { Play, Pause, SkipBack, SkipForward, Download, Save, Sliders } from 'lucide-react';
+import { Download, Pause, Play, Save, SkipBack, SkipForward } from 'lucide-react';
 
-function Controls({
-  isPlaying = false,
-  animSpeed = 1,
-  animMode = 'pairs',
-  layoutName = 'circle',
-  onTogglePlay,
-  onStepPrev,
-  onStepNext,
-  onChangeSpeed,
-  onChangeMode,
-  onChangeLayout,
-  onExportImage,
-  onExportJson
-}) {
+function Controls({ isPlaying = false, animSpeed = 1, animMode = 'pairs', layoutName = 'circle', onTogglePlay, onStepPrev, onStepNext, onChangeSpeed, onChangeMode, onChangeLayout, onExportImage, onExportGraphML }) {
   return (
-    <div
-      className="glass-panel"
-      style={{
-        padding: '10px 16px',
-        borderRadius: '10px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '12px'
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <button
-          className="btn-secondary"
-          onClick={onStepPrev}
-          title="Previous Step"
-          style={{ padding: '6px' }}
-        >
-          <SkipBack size={15} />
-        </button>
-
-        <button
-          className="btn-primary"
-          onClick={onTogglePlay}
-          style={{ padding: '6px 14px', fontSize: '12px' }}
-        >
-          {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-          <span>{isPlaying ? 'Pause' : 'Play'}</span>
-        </button>
-
-        <button
-          className="btn-secondary"
-          onClick={onStepNext}
-          title="Next Step"
-          style={{ padding: '6px' }}
-        >
-          <SkipForward size={15} />
-        </button>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '6px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Speed:</span>
-          <select
-            value={animSpeed}
-            onChange={e => onChangeSpeed(Number(e.target.value))}
-            style={{
-              background: 'var(--bg-hover)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '5px',
-              padding: '3px 6px',
-              fontSize: '11px',
-              outline: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            <option value={0.5}>0.5x</option>
-            <option value={1}>1.0x</option>
-            <option value={2}>2.0x</option>
-            <option value={4}>4.0x</option>
-          </select>
-        </div>
+    <div className="controls-bar">
+      <div className="control-group">
+        <button className="btn btn-quiet" onClick={onStepPrev} title="Previous step"><SkipBack size={14} /></button>
+        <button className="btn btn-primary" onClick={onTogglePlay}><>{isPlaying ? <Pause size={13} /> : <Play size={13} />}{isPlaying ? 'Pause' : 'Play'}</></button>
+        <button className="btn btn-quiet" onClick={onStepNext} title="Next step"><SkipForward size={14} /></button>
+        <span className="control-separator" />
+        <label className="control-label" htmlFor="speed">Speed</label>
+        <select id="speed" className="select-control" value={animSpeed} onChange={event => onChangeSpeed(Number(event.target.value))}>
+          <option value={0.5}>0.5x</option><option value={1}>1x</option><option value={2}>2x</option><option value={4}>4x</option>
+        </select>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Mode:</span>
-          <select
-            value={animMode}
-            onChange={e => onChangeMode(e.target.value)}
-            style={{
-              background: 'var(--bg-hover)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '5px',
-              padding: '3px 6px',
-              fontSize: '11px',
-              outline: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="single">Single (1 Color)</option>
-            <option value="pairs">Pairs (2 Colors)</option>
-          </select>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Sliders size={13} color="var(--text-muted)" />
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Layout:</span>
-          <select
-            value={layoutName}
-            onChange={e => onChangeLayout(e.target.value)}
-            style={{
-              background: 'var(--bg-hover)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '5px',
-              padding: '3px 6px',
-              fontSize: '11px',
-              outline: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="circle">Circular</option>
-            <option value="concentric">Concentric</option>
-            <option value="cose">Force (CoSE)</option>
-            <option value="grid">Grid</option>
-          </select>
-        </div>
+      <div className="control-group">
+        <label className="control-label" htmlFor="mode">Show</label>
+        <select id="mode" className="select-control" value={animMode} onChange={event => onChangeMode(event.target.value)}>
+          <option value="single">Single class</option><option value="pairs">Color pairs</option>
+        </select>
+        <label className="control-label" htmlFor="layout">Layout</label>
+        <select id="layout" className="select-control" value={layoutName} onChange={event => onChangeLayout(event.target.value)}>
+          <option value="circle">Circular</option><option value="concentric">Concentric</option><option value="cose">Force</option><option value="grid">Grid</option>
+        </select>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <button className="btn-secondary" onClick={onExportImage} style={{ fontSize: '11px', padding: '5px 10px' }}>
-          <Download size={14} /> Export Frame
-        </button>
-        <button className="btn-secondary" onClick={onExportJson} style={{ fontSize: '11px', padding: '5px 10px' }}>
-          <Save size={14} /> Export JSON
-        </button>
+      <div className="control-group">
+        <button className="btn" onClick={onExportImage}><Download size={12} /> PNG</button>
+        <button className="btn" onClick={onExportGraphML}><Save size={12} /> GraphML</button>
       </div>
     </div>
   );

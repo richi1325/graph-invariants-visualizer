@@ -29,7 +29,19 @@ This research suite provides an interactive computational environment for explor
 - **Framework**: React 19 + Vite
 - **Graph Visualization**: Cytoscape.js core
 - **Icons**: Lucide React
-- **Styling**: Custom modern dark theme CSS tokens & glassmorphism layout
+- **Styling**: Custom minimal white UI with responsive CSS
+- **Data format**: GraphML only (`.graphml`), with edge colors stored as integer attributes
+
+## GraphML Data
+
+Place GraphML files under `data/<coloration>/` using names such as `n_10_k_22.graphml`.
+The application reads the edge color from the GraphML attribute declared as `color`:
+
+```xml
+<key id="d0" for="edge" attr.name="color" attr.type="int"/>
+```
+
+The data directory contains only the configuration with the highest `k` for each `n`.
 
 ---
 

@@ -1,205 +1,106 @@
 import { useState, useMemo } from 'react';
-import { Layers, Network, GitBranch, Share2, ChevronRight, FileText, Search } from 'lucide-react';
+import { ChevronRight, FileText, GitBranch, Layers, Network, Search, Share2 } from 'lucide-react';
 
 const CATEGORIES = [
-  { id: 'achromatic', label: 'Achromatic Index', icon: Network },
-  { id: 'achromatic_arboricity', label: 'Achromatic Arboricity', icon: GitBranch },
-  { id: 'connected_pseudoachromatic', label: 'Connected Pseudoachromatic', icon: Share2 },
-  { id: 'pseudoachromatic', label: 'Pseudoachromatic Index', icon: Layers }
+  { id: 'achromatic', label: 'Achromatic index', icon: Network },
+  { id: 'achromatic_arboricity', label: 'Achromatic arboricity', icon: GitBranch },
+  { id: 'connected_pseudoachromatic', label: 'Connected pseudoachromatic', icon: Share2 },
+  { id: 'pseudoachromatic', label: 'Pseudoachromatic index', icon: Layers }
 ];
 
-const jsonGlob = import.meta.glob('../../data/**/*.json', { eager: true });
-const txtGlob = import.meta.glob('../../data/**/*.txt', { query: '?raw', eager: true });
+const graphmlGlob = import.meta.glob('../../data/**/*.graphml', { query: '?raw', eager: true });
 
 function ConfigMenu({ activeCategory, activeConfigId, onSelectCategory, onSelectConfig }) {
   const [expandedCategory, setExpandedCategory] = useState(activeCategory || 'achromatic');
   const [searchQuery, setSearchQuery] = useState('');
 
   const configsByCategory = useMemo(() => {
-    const map = {
-      achromatic: {},
-      achromatic_arboricity: {},
-      connected_pseudoachromatic: {},
-      pseudoachromatic: {}
+    const map = Object.fromEntries(CATEGORIES.map(category => [category.id, []]));
+
+    const processPath = path => {
+      const parts = path.replace(/\\/g, '/').split('/');
+      if (parts.length < 4) return;
+      const category = parts[parts.length - 2];
+      const rawFilename = parts[parts.length - 1];
+      const filename = rawFilename.replace(/\.graphml$/i, '');
+      if (!map[category]) return;
+
+      const match = filename.match(/n_(\d+)_k_(\d+)/i);
+      const n = match ? parseInt(match[1], 10) : 0;
+      const k = match ? parseInt(match[2], 10) : 0;
+      map[category].push({
+        id: filename,
+        name: `n=${n}, k=${k}${filename.toLowerCase().includes('tabu') ? ' (tabu)' : ''}`,
+        n,
+        k
+      });
     };
 
-    const processPath = (path, isJson) => {
-      const normalizedPath = path.replace(/\\/g, '/');
-      const parts = normalizedPath.split('/');
-      if (parts.length >= 4) {
-        const cat = parts[parts.length - 2];
-        const rawFilename = parts[parts.length - 1];
-        const filename = rawFilename.replace(/\.json$/i, '').replace(/\.txt$/i, '');
+    Object.keys(graphmlGlob).forEach(path => processPath(path));
 
-        if (map[cat]) {
-          const match = filename.match(/n_(\d+)_k_(\d+)/i);
-          const n = match ? parseInt(match[1], 10) : 0;
-          const k = match ? parseInt(match[2], 10) : 0;
-          const isTabu = filename.toLowerCase().includes('tabu');
-          const displayName = `n=${n}, k=${k}${isTabu ? ' (Tabu)' : ''}`;
-
-          if (!map[cat][filename] || isJson) {
-            map[cat][filename] = {
-              id: filename,
-              rawFilename,
-              name: displayName,
-              n,
-              k,
-              isTabu,
-              isJson
-            };
-          }
-        }
-      }
-    };
-
-    Object.keys(txtGlob).forEach(path => processPath(path, false));
-    Object.keys(jsonGlob).forEach(path => processPath(path, true));
-
-    const result = {};
-    Object.keys(map).forEach(cat => {
-      result[cat] = Object.values(map[cat]).sort((a, b) => a.n - b.n || a.k - b.k);
-    });
-
-    return result;
+    Object.values(map).forEach(configs => configs.sort((a, b) => a.n - b.n || a.k - b.k));
+    return map;
   }, []);
 
-  const handleCategoryClick = (catId) => {
-    setExpandedCategory(catId);
-    onSelectCategory(catId);
-    const list = configsByCategory[catId] || [];
-    if (list.length > 0) {
-      onSelectConfig(list[0].id);
+  const handleCategoryClick = categoryId => {
+    if (expandedCategory === categoryId) {
+      setExpandedCategory(null);
+      return;
     }
+
+    setExpandedCategory(categoryId);
+    onSelectCategory(categoryId);
+    const firstConfig = configsByCategory[categoryId]?.[0];
+    if (firstConfig) onSelectConfig(firstConfig.id);
   };
 
   return (
-    <aside
-      style={{
-        width: '280px',
-        backgroundColor: 'var(--bg-sidebar)',
-        borderRight: '1px solid var(--border-color)',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        userSelect: 'none'
-      }}
-    >
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-color)' }}>
-        <h2 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-          Configurations
-        </h2>
-
-        <div style={{ position: 'relative' }}>
-          <Search size={13} color="var(--text-muted)" style={{ position: 'absolute', left: '10px', top: '9px' }} />
+    <aside className="config-sidebar">
+      <div className="sidebar-header">
+        <div className="sidebar-heading">
+          <h2>Configurations</h2>
+          <span className="count">{Object.values(configsByCategory).flat().length}</span>
+        </div>
+        <p className="sidebar-note">Curated maximum k for each n.</p>
+        <div className="search-box">
+          <Search size={13} />
           <input
-            type="text"
-            placeholder="Filter n=..., k=..."
+            type="search"
+            placeholder="Search n or k"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '6px 10px 6px 28px',
-              borderRadius: '6px',
-              background: 'var(--bg-hover)',
-              border: '1px solid var(--border-color)',
-              color: '#fff',
-              fontSize: '11px',
-              outline: 'none'
-            }}
+            onChange={event => setSearchQuery(event.target.value)}
           />
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 8px' }}>
+      <div className="sidebar-scroll">
         {CATEGORIES.map(category => {
           const Icon = category.icon;
           const isExpanded = expandedCategory === category.id;
-          let configs = configsByCategory[category.id] || [];
-
-          if (searchQuery.trim() !== '') {
-            const q = searchQuery.toLowerCase();
-            configs = configs.filter(c => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
-          }
+          const query = searchQuery.trim().toLowerCase();
+          const configs = (configsByCategory[category.id] || []).filter(config =>
+            !query || config.name.toLowerCase().includes(query) || config.id.toLowerCase().includes(query)
+          );
 
           return (
-            <div key={category.id} style={{ marginBottom: '6px' }}>
-              <button
-                onClick={() => handleCategoryClick(category.id)}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 10px',
-                  borderRadius: '6px',
-                  background: isExpanded ? 'var(--bg-hover)' : 'transparent',
-                  border: 'none',
-                  color: isExpanded ? '#FFF' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Icon size={14} color={isExpanded ? 'var(--accent-blue)' : 'var(--text-muted)'} />
-                  <span>{category.label}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span className="badge badge-info" style={{ fontSize: '10px', padding: '1px 5px' }}>
-                    {configs.length}
-                  </span>
-                  <ChevronRight
-                    size={13}
-                    style={{
-                      transform: isExpanded ? 'rotate(90deg)' : 'none',
-                      transition: 'transform 0.2s ease',
-                      color: 'var(--text-muted)'
-                    }}
-                  />
-                </div>
+            <div className="category-block" key={category.id}>
+              <button className={`category-button ${isExpanded ? 'expanded' : ''}`} onClick={() => handleCategoryClick(category.id)}>
+                <span className="category-label"><Icon size={14} /><span>{category.label}</span></span>
+                <span className="category-meta"><span className="category-count">{configs.length}</span><ChevronRight size={13} /></span>
               </button>
 
               {isExpanded && (
-                <div style={{ marginTop: '3px', paddingLeft: '10px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  {configs.length === 0 ? (
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '6px 8px' }}>
-                      No matching configurations.
-                    </div>
-                  ) : (
-                    configs.map(cfg => {
-                      const isSelected = activeCategory === category.id && activeConfigId === cfg.id;
-                      return (
-                        <button
-                          key={cfg.id}
-                          onClick={() => onSelectConfig(cfg.id)}
-                          style={{
-                            width: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '6px 8px',
-                            borderRadius: '5px',
-                            background: isSelected ? 'var(--bg-accent)' : 'transparent',
-                            border: isSelected ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid transparent',
-                            color: isSelected ? '#FFF' : 'var(--text-muted)',
-                            cursor: 'pointer',
-                            fontSize: '11px',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                            <FileText size={11} color={isSelected ? 'var(--accent-cyan)' : 'var(--text-muted)'} />
-                            <span>{cfg.name}</span>
-                          </div>
-                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                            k={cfg.k}
-                          </span>
-                        </button>
-                      );
-                    })
-                  )}
+                <div className="config-list">
+                  {configs.length === 0 ? <p className="empty-sidebar">No configurations found.</p> : configs.map(config => (
+                    <button
+                      className={`config-item ${activeCategory === category.id && activeConfigId === config.id ? 'selected' : ''}`}
+                      key={config.id}
+                      onClick={() => onSelectConfig(config.id)}
+                    >
+                      <span><FileText size={10} /> {config.name}</span>
+                      <span>k={config.k}</span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>

@@ -1,15 +1,27 @@
-export const DEFAULT_COLOR_PALETTE = [
-  '#E6194B', '#3CB44B', '#FFE119', '#4363D8', '#F58231', '#911EB4',
-  '#46F0F0', '#F032E6', '#BCF60C', '#FABEBE', '#008080', '#E6BEFF',
-  '#9A6324', '#FFFAC8', '#800000', '#AAFFC3', '#808000', '#FFD8B1',
-  '#000075', '#808080', '#00E676', '#FF3D00', '#651FFF', '#00E5FF'
-];
-
 export const LINE_STYLES = ['solid', 'dashed', 'dotted'];
 
+function hslToHex(hue, saturation, lightness) {
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const segment = hue / 60;
+  const secondComponent = chroma * (1 - Math.abs((segment % 2) - 1));
+  const match = lightness - chroma / 2;
+  const rgb = segment < 1 ? [chroma, secondComponent, 0]
+    : segment < 2 ? [secondComponent, chroma, 0]
+      : segment < 3 ? [0, chroma, secondComponent]
+        : segment < 4 ? [0, secondComponent, chroma]
+          : segment < 5 ? [secondComponent, 0, chroma]
+            : [chroma, 0, secondComponent];
+
+  return `#${rgb.map(channel => Math.round((channel + match) * 255).toString(16).padStart(2, '0')).join('')}`;
+}
+
 export function getColorAttributes(colorCode) {
-  const color = DEFAULT_COLOR_PALETTE[Math.abs(colorCode) % DEFAULT_COLOR_PALETTE.length];
-  const style = LINE_STYLES[Math.abs(colorCode) % LINE_STYLES.length];
+  // The golden-angle distribution keeps large color sets distinct instead of
+  // cycling through a short palette (the data contains more than 150 classes).
+  const normalizedCode = Number.isFinite(Number(colorCode)) ? Math.abs(Number(colorCode)) : 0;
+  const hue = (normalizedCode * 137.508) % 360;
+  const color = hslToHex(hue, 0.68, 0.44);
+  const style = LINE_STYLES[normalizedCode % LINE_STYLES.length];
   return { color, style };
 }
 
